@@ -41,7 +41,10 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
         val retrofit = Retrofit.Builder().baseUrl(BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build().create(ColorBookAPI::class.java)
-        job = CoroutineScope(Dispatchers.IO).launch {
+        val handler = CoroutineExceptionHandler {coroutineContext, throwable ->
+            println("exception: " + throwable.localizedMessage)
+        }
+        job = CoroutineScope(Dispatchers.IO + handler).launch(handler) {
             val response = retrofit.getData()
             withContext(Dispatchers.Main) {
                 if (response.isSuccessful) {
