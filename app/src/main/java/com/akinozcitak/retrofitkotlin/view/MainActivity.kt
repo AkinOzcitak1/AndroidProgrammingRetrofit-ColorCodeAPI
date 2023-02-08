@@ -9,16 +9,20 @@ import com.akinozcitak.retrofitkotlin.adapter.RecyclerViewAdapter
 import com.akinozcitak.retrofitkotlin.databinding.ActivityMainBinding
 import com.akinozcitak.retrofitkotlin.model.ColorBookModel
 import com.akinozcitak.retrofitkotlin.service.ColorBookAPI
+import io.reactivex.disposables.CompositeDisposable
+import kotlinx.coroutines.*
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
+import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 
 class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
     private val BASE_URL = "https://gist.githubusercontent.com/"
     private var colorBookModels: ArrayList<ColorBookModel>? = null
-    private var recyclerViewAdapter : RecyclerViewAdapter? = null
+    private var recyclerViewAdapter: RecyclerViewAdapter? = null
+    private var job : Job? = null
     private lateinit var binding: ActivityMainBinding
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,18 +30,44 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
         val view = binding.root
         setContentView(view)
 
-
         val layoutManager: RecyclerView.LayoutManager = LinearLayoutManager(this)
         binding.recyclerView.layoutManager = layoutManager
 
         loadData()
 
     }
+
     private fun loadData() {
-        val retrofit = Retrofit.Builder().baseUrl(BASE_URL).addConverterFactory(GsonConverterFactory.create()).build()
+        val retrofit = Retrofit.Builder().baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build().create(ColorBookAPI::class.java)
+        job = CoroutineScope(Dispatchers.IO).launch {
+            val response = retrofit.getData()
+            withContext(Dispatchers.Main) {
+                if (response.isSuccessful) {
+                    response.body()?.let {
+                        colorBookModels = ArrayList(it)
+                        colorBookModels?.let {
+                            recyclerViewAdapter = RecyclerViewAdapter(it, this@MainActivity)
+                            binding.recyclerView.adapter = recyclerViewAdapter
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+    }
+
+        //Without Coroutines
+        /*
         val service = retrofit.create(ColorBookAPI::class.java)
         val call = service.getData()
+
+
         call.enqueue(object : Callback<List<ColorBookModel>> {
+
             override fun onResponse(
                 call: Call<List<ColorBookModel>>,
                 response: Response<List<ColorBookModel>>
@@ -63,9 +93,14 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
             }
 
         })
-    }
+    }*/
 
-    override fun onItemClick(colorBookModel: ColorBookModel) {
-         Toast.makeText(this, "Clicked: ${colorBookModel.name}", Toast.LENGTH_SHORT).show()
+        override fun onItemClick(colorBookModel: ColorBookModel) {
+            Toast.makeText(this, "Clicked: ${colorBookModel.name}", Toast.LENGTH_SHORT).show()
+        }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        job?.cancel()
     }
 }
